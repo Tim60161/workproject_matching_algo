@@ -71,35 +71,49 @@ def job_info_extraction(jobs):
     return job_df
 
 
-def calc_similarity(applicant_df, job_df, N=3, parallel=False):
-    """Calculate cosine similarity based on BERT embeddings of combined skills."""
+def calc_similarity(applicant_df, job_df, N=3):
+    """"Calculate cosine simlarity based on BERT embeddings of skills"""
 
-    # Initialize the model once outside the loop for efficiency
-    model = SentenceTransformer('all-mpnet-base-v2')
-    model.eval()
-
-     # Precompute job embeddings
-    job_df['Skills_Text'] = job_df['Skills'].apply(lambda x: ' '.join(sorted(set(x))) if isinstance(x, list) else '')
-    job_embeddings = model.encode(job_df['Skills_Text'].tolist())
-    # Precompute applicant embeddings
-    applicant_df['Skills_Text'] = applicant_df['Skills'].apply(lambda x: ' '.join(sorted(set(x))) if isinstance(x, list) else '')
-    applicant_embeddings = model.encode(
-        applicant_df['Skills_Text'].tolist(),
-        batch_size=32,
-        num_workers=os.cpu_count() // 2 if parallel else 0,
-        show_progress_bar=False
-    )
-
-    # Compute cosine similarity matrix
-    similarity_matrix = cosine_similarity(job_embeddings, applicant_embeddings)
-
-    # Create a DataFrame from the similarity matrix
-    similarity_df = pd.DataFrame(similarity_matrix.T, index=applicant_df['name'], columns=job_df.index)
-    similarity_df = similarity_df.reset_index().melt(id_vars='name', var_name='job_id', value_name='similarity_score')
-    similarity_df['rank'] = similarity_df.groupby('job_id')['similarity_score'].rank(ascending=False)
-    similarity_df['interview_status'] = similarity_df['rank'].apply(lambda x: 'Selected' if x <= N else 'Not Selected')
-
-    return similarity_df
+    def semantic_similarity_sbert_base_v2(job,resume):
+        """calculate similarity with SBERT all-mpnet-base-v2"""
+        model = SentenceTransformer('all-mpnet-base-v2')
+        model.eval()
+        #Encoding:
+        score = 0
+        sen = job+resume
+        sen_embeddings = model.encode(sen)
+        for i in range(len(job)):
+            if job[i] in resume:
+                score += 1
+            else:
+                max_cosine_sim = max(cosine_similarity([sen_embeddings[i]],sen_embeddings[len(job):])[0]) 
+                if max_cosine_sim >= 0.4:
+                    score += max_cosine_sim
+        score = score/len(job)  
+        return round(score,3)
+    
+    columns = ['applicant', 'job_id', 'all-mpnet-base-v2_score']
+    matching_dataframe = pd.DataFrame(columns=columns)
+    
+    for job_index in range(job_df.shape[0]):
+        columns = ['applicant', 'job_id', 'all-mpnet-base-v2_score']
+        matching_dataframe = pd.DataFrame(columns=columns)
+        ranking_dataframe = pd.DataFrame(columns=columns)
+        
+        matching_data = []
+        
+        for applicant_id in range(applicant_df.shape[0]):
+            matching_dataframe_job = {
+                "applicant": applicant_df.iloc[applicant_id, 0],
+                "job_id": job_index,
+                "all-mpnet-base-v2_score": semantic_similarity_sbert_base_v2(job_df['Skills'][job_index], applicant_df['Skills'][applicant_id])
+            }
+            matching_data.append(matching_dataframe_job)
+        
+        matching_dataframe = pd.concat([matching_dataframe, pd.DataFrame(matching_data)], ignore_index=True)
+    matching_dataframe['rank'] = matching_dataframe['all-mpnet-base-v2_score'].rank(ascending=False)
+    matching_dataframe['interview_status'] = matching_dataframe['rank'].apply(lambda x: 'Selected' if x <= N else 'Not Selected')
+    return matching_dataframe
 
 @retry(wait=wait_random_exponential(min=1, max=60), stop=stop_after_attempt(6))
 def tailored_questions(api_key,  applicants, required_skills, model="gpt-4o-mini"):
