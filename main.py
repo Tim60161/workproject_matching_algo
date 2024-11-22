@@ -196,4 +196,3 @@ def main(open_ai=False):
 
 if __name__ == "__main__":
     main(open_ai=False)
-    
