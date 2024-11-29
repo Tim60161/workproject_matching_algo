@@ -111,6 +111,49 @@ def calc_similarity(applicant_df, job_df, N=3, parallel=False):
 
     return similarity_df
 
+def calc_similarity_sbs(applicant_df, job_df):
+    """"Calculate cosine simlarity based on BERT embeddings of skills (skill-by-skill)"""
+
+    def semantic_similarity_sbert_base_v2(job,resume):
+        """calculate similarity with SBERT all-mpnet-base-v2"""
+        model = SentenceTransformer('all-mpnet-base-v2')
+        model.eval()
+        #Encoding:
+        score = 0
+        sen = job+resume
+        sen_embeddings = model.encode(sen)
+        for i in range(len(job)):
+            if job[i] in resume:
+                score += 1
+            else:
+                max_cosine_sim = max(cosine_similarity([sen_embeddings[i]],sen_embeddings[len(job):])[0]) 
+                if max_cosine_sim >= 0.4:
+                    score += max_cosine_sim
+        score = score/len(job)  
+        return round(score,3)
+    
+    columns = ['applicant', 'job_id', 'all-mpnet-base-v2_score']
+    matching_dataframe = pd.DataFrame(columns=columns)
+    
+    for job_index in range(job_df.shape[0]):
+        columns = ['applicant', 'job_id', 'all-mpnet-base-v2_score']
+        matching_dataframe = pd.DataFrame(columns=columns)
+        ranking_dataframe = pd.DataFrame(columns=columns)
+        
+        matching_data = []
+        
+        for applicant_id in range(applicant_df.shape[0]):
+            matching_dataframe_job = {
+                "applicant": applicant_df.iloc[applicant_id, 0],
+                "job_id": job_index,
+                "all-mpnet-base-v2_score": semantic_similarity_sbert_base_v2(job_df['Skills'][job_index], applicant_df['Skills'][applicant_id])
+            }
+            matching_data.append(matching_dataframe_job)
+        
+        matching_dataframe = pd.concat([matching_dataframe, pd.DataFrame(matching_data)], ignore_index=True)
+    matching_dataframe['rank'] = matching_dataframe['all-mpnet-base-v2_score'].rank(ascending=False)
+    return matching_dataframe
+
 @retry(wait=wait_random_exponential(min=1, max=60), stop=stop_after_attempt(6))
 def tailored_questions(api_key,  applicants, required_skills, model="gpt-4o-mini"):
     """ function to create tailored interview questions with openai api """
@@ -148,7 +191,7 @@ def bespoke_apologies(api_key,  applicants, required_skills, model="gpt-4o-mini"
 
 
 ######################################################################################
-###                                  SCRIPT                                        ###
+###                                  SCRIPTS                                        ###
 ######################################################################################
 import time # for benchmarking during code optimization
 
