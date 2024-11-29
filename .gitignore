@@ -173,3 +173,6 @@ user_interface/static/hanna.png
 
 # glove embeddings
 glove.6B/
+
+# others
+.DS_Store
