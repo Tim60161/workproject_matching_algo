@@ -258,6 +258,77 @@ def calc_similarity_sbs_NV_Embed_v2(applicant_df, job_df):
     matching_dataframe['rank'] = matching_dataframe['NV-Embed-v2_score'].rank(ascending=False)
     return matching_dataframe
 
+import torch
+from transformers import AutoTokenizer, AutoModel, AutoConfig
+from peft import PeftModel
+from sklearn.metrics.pairwise import cosine_similarity
+import pandas as pd
+
+def calc_similarity_sbs_BinGSE_MetaLlama_3_8B_Instruct(applicant_df, job_df):
+    """Calculate cosine similarity based on BinGSE-Meta-Llama-3-8B-Instruct embeddings of skills (skill-by-skill)."""
+
+    def semantic_similarity_BinGSE_MetaLlama_3_8B_Instruct(job, resume):
+        """Calculate similarity with BinGSE-Meta-Llama-3-8B-Instruct."""
+        # Load the base model, MNTP weights, and BinGSE LoRA weights
+        tokenizer = AutoTokenizer.from_pretrained("McGill-NLP/LLM2Vec-Meta-Llama-3-8B-Instruct-mntp")
+        config = AutoConfig.from_pretrained("McGill-NLP/LLM2Vec-Meta-Llama-3-8B-Instruct-mntp", trust_remote_code=True)
+        base_model = AutoModel.from_pretrained(
+            "McGill-NLP/LLM2Vec-Meta-Llama-3-8B-Instruct-mntp",
+            trust_remote_code=True,
+            config=config,
+            torch_dtype=torch.bfloat16,
+            device_map="cuda" if torch.cuda.is_available() else "cpu",
+        )
+
+        # Load MNTP weights
+        mntp_model = PeftModel.from_pretrained(base_model, "McGill-NLP/LLM2Vec-Meta-Llama-3-8B-Instruct-mntp")
+        mntp_model = mntp_model.merge_and_unload()
+
+        # Load BinGSE LoRA weights
+        model = PeftModel.from_pretrained(mntp_model, "tsirif/BinGSE-Meta-Llama-3-8B-Instruct")
+
+        # Tokenize job and resume text
+        job_tokens = tokenizer(job, return_tensors="pt", truncation=True, padding=True)
+        resume_tokens = tokenizer(resume, return_tensors="pt", truncation=True, padding=True)
+
+        # Generate embeddings
+        with torch.no_grad():
+            job_embedding = model(**job_tokens).last_hidden_state.mean(dim=1).cpu().numpy()
+            resume_embedding = model(**resume_tokens).last_hidden_state.mean(dim=1).cpu().numpy()
+
+        # Calculate cosine similarity
+        similarity = cosine_similarity(job_embedding, resume_embedding)[0][0]
+        return round(similarity, 3)
+
+    # Prepare a DataFrame to store results
+    matching_dataframe = []
+
+    # Loop through each job in the job_df
+    for job_index in range(len(job_df)):
+        job_skills = job_df['Skills'].iloc[job_index]  # Use iloc for positional indexing
+
+        # Loop through each applicant in the applicant_df
+        for applicant_id in range(len(applicant_df)):
+            applicant_skills = applicant_df['Skills'].iloc[applicant_id]  # Use iloc for positional indexing
+            applicant_name = applicant_df['name'].iloc[applicant_id]  # Ensure correct column access
+
+            # Compute similarity score
+            score = semantic_similarity_BinGSE_MetaLlama_3_8B_Instruct(" ".join(job_skills), " ".join(applicant_skills))
+
+            # Append result to the DataFrame
+            matching_dataframe.append({
+                "applicant": applicant_name,
+                "job_id": job_index,
+                "BinGSE-Meta-Llama-3-8B-Instruct_score": score
+            })
+
+    # Create a DataFrame from results
+    matching_dataframe = pd.DataFrame(matching_dataframe)
+
+    # Add rank based on similarity score
+    matching_dataframe['rank'] = matching_dataframe['BinGSE-Meta-Llama-3-8B-Instruct_score'].rank(ascending=False)
+    return matching_dataframe
+
 @retry(wait=wait_random_exponential(min=1, max=60), stop=stop_after_attempt(6))
 def tailored_questions(api_key,  applicants, required_skills, model="gpt-4o-mini"):
     """ function to create tailored interview questions with openai api """
