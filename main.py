@@ -258,38 +258,21 @@ def calc_similarity_sbs_NV_Embed_v2(applicant_df, job_df):
     matching_dataframe['rank'] = matching_dataframe['NV-Embed-v2_score'].rank(ascending=False)
     return matching_dataframe
 
-import torch
-from transformers import AutoTokenizer, AutoModel, AutoConfig
-from peft import PeftModel
-from sklearn.metrics.pairwise import cosine_similarity
-import pandas as pd
-
-def calc_similarity_sbs_BinGSE_MetaLlama_3_8B_Instruct(applicant_df, job_df):
+def calc_similarity_sbs_BinGSE_MetaLlama_3_8B_Instruct(applicant_df, job_df, tokenizer, model):
     """Calculate cosine similarity based on BinGSE-Meta-Llama-3-8B-Instruct embeddings of skills (skill-by-skill)."""
 
-    def semantic_similarity_BinGSE_MetaLlama_3_8B_Instruct(job, resume):
+    def semantic_similarity_BinGSE_MetaLlama_3_8B_Instruct(job, resume, tokenizer, model):
         """Calculate similarity with BinGSE-Meta-Llama-3-8B-Instruct."""
-        # Load the base model, MNTP weights, and BinGSE LoRA weights
-        tokenizer = AutoTokenizer.from_pretrained("McGill-NLP/LLM2Vec-Meta-Llama-3-8B-Instruct-mntp")
-        config = AutoConfig.from_pretrained("McGill-NLP/LLM2Vec-Meta-Llama-3-8B-Instruct-mntp", trust_remote_code=True)
-        base_model = AutoModel.from_pretrained(
-            "McGill-NLP/LLM2Vec-Meta-Llama-3-8B-Instruct-mntp",
-            trust_remote_code=True,
-            config=config,
-            torch_dtype=torch.bfloat16,
-            device_map="cuda" if torch.cuda.is_available() else "cpu",
-        )
-
-        # Load MNTP weights
-        mntp_model = PeftModel.from_pretrained(base_model, "McGill-NLP/LLM2Vec-Meta-Llama-3-8B-Instruct-mntp")
-        mntp_model = mntp_model.merge_and_unload()
-
-        # Load BinGSE LoRA weights
-        model = PeftModel.from_pretrained(mntp_model, "tsirif/BinGSE-Meta-Llama-3-8B-Instruct")
-
+        import torch  # Import torch locally if needed
+        max_length = 512  # Define a reasonable max length for truncation
         # Tokenize job and resume text
-        job_tokens = tokenizer(job, return_tensors="pt", truncation=True, padding=True)
-        resume_tokens = tokenizer(resume, return_tensors="pt", truncation=True, padding=True)
+        job_tokens = tokenizer(job, return_tensors="pt", truncation=True, padding=True, max_length=max_length)
+        resume_tokens = tokenizer(resume, return_tensors="pt", truncation=True, padding=True, max_length=max_length)
+
+        # Move tokens to the appropriate device and ensure correct tensor type
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        job_tokens = {key: value.to(device).long() if key == "input_ids" else value.to(device) for key, value in job_tokens.items()}
+        resume_tokens = {key: value.to(device).long() if key == "input_ids" else value.to(device) for key, value in resume_tokens.items()}
 
         # Generate embeddings
         with torch.no_grad():
@@ -313,7 +296,9 @@ def calc_similarity_sbs_BinGSE_MetaLlama_3_8B_Instruct(applicant_df, job_df):
             applicant_name = applicant_df['name'].iloc[applicant_id]  # Ensure correct column access
 
             # Compute similarity score
-            score = semantic_similarity_BinGSE_MetaLlama_3_8B_Instruct(" ".join(job_skills), " ".join(applicant_skills))
+            score = semantic_similarity_BinGSE_MetaLlama_3_8B_Instruct(
+                " ".join(job_skills), " ".join(applicant_skills), tokenizer, model
+            )
 
             # Append result to the DataFrame
             matching_dataframe.append({
