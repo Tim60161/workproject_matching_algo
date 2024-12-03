@@ -19,8 +19,8 @@ warnings.filterwarnings("ignore")
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
 # Paths to your pattern files
-#skills_patterns_path = os.path.join(ROOT_DIR, 'workproject_matching_algo','Resources', 'data', 'skills.jsonl')
-skills_patterns_path = os.path.join(ROOT_DIR, 'workproject_matching_algo Kopie','Resources', 'data', 'skills.jsonl')
+skills_patterns_path = os.path.join(ROOT_DIR, 'workproject_matching_algo','Resources', 'data', 'skills.jsonl')
+#skills_patterns_path = os.path.join(ROOT_DIR, 'workproject_matching_algo Kopie','Resources', 'data', 'skills.jsonl')
 
 def get_resumes(directory):
     """ Function to parse and extract text from PDFs in a directory """
