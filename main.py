@@ -19,8 +19,8 @@ warnings.filterwarnings("ignore")
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
 # Paths to your pattern files
-skills_patterns_path = os.path.join(ROOT_DIR, 'workproject_matching_algo','Resources', 'data', 'skills.jsonl')
-
+#skills_patterns_path = os.path.join(ROOT_DIR, 'workproject_matching_algo','Resources', 'data', 'skills.jsonl')
+skills_patterns_path = os.path.join(ROOT_DIR, 'workproject_matching_algo Kopie','Resources', 'data', 'skills.jsonl')
 
 def get_resumes(directory):
     """ Function to parse and extract text from PDFs in a directory """
@@ -264,7 +264,7 @@ def calc_similarity_sbs_BinGSE_MetaLlama_3_8B_Instruct(applicant_df, job_df, tok
     def semantic_similarity_BinGSE_MetaLlama_3_8B_Instruct(job, resume, tokenizer, model):
         """Calculate similarity with BinGSE-Meta-Llama-3-8B-Instruct."""
         import torch  # Import torch locally if needed
-        max_length = 512  # Define a reasonable max length for truncation
+        max_length = 75  # Define a reasonable max length for truncation
         # Tokenize job and resume text
         job_tokens = tokenizer(job, return_tensors="pt", truncation=True, padding=True, max_length=max_length)
         resume_tokens = tokenizer(resume, return_tensors="pt", truncation=True, padding=True, max_length=max_length)
@@ -312,6 +312,62 @@ def calc_similarity_sbs_BinGSE_MetaLlama_3_8B_Instruct(applicant_df, job_df, tok
 
     # Add rank based on similarity score
     matching_dataframe['rank'] = matching_dataframe['BinGSE-Meta-Llama-3-8B-Instruct_score'].rank(ascending=False)
+    return matching_dataframe
+
+def calc_similarity_sbs_VoyageLarge2Instruct(applicant_df, job_df, tokenizer, model):
+    """Calculate cosine similarity based on voyage-large-2-instruct embeddings of skills (skill-by-skill)."""
+
+    def semantic_similarity_VoyageLarge2Instruct(job, resume, tokenizer, model):
+        """Calculate similarity with voyage-large-2-instruct."""
+        import torch  # Import torch locally if needed
+        max_length = 75  # Define a reasonable max length for truncation
+        # Tokenize job and resume text
+        job_tokens = tokenizer(job, return_tensors="pt", truncation=True, padding=True, max_length=max_length)
+        resume_tokens = tokenizer(resume, return_tensors="pt", truncation=True, padding=True, max_length=max_length)
+
+        # Move tokens to the appropriate device and ensure correct tensor type
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        job_tokens = {key: value.to(device) for key, value in job_tokens.items()}
+        resume_tokens = {key: value.to(device) for key, value in resume_tokens.items()}
+
+        # Generate embeddings
+        with torch.no_grad():
+            job_embedding = model(**job_tokens).last_hidden_state.mean(dim=1).cpu().numpy()
+            resume_embedding = model(**resume_tokens).last_hidden_state.mean(dim=1).cpu().numpy()
+
+        # Calculate cosine similarity
+        similarity = cosine_similarity(job_embedding, resume_embedding)[0][0]
+        return round(similarity, 3)
+
+    # Prepare a DataFrame to store results
+    matching_dataframe = []
+
+    # Loop through each job in the job_df
+    for job_index in range(len(job_df)):
+        job_skills = job_df['Skills'].iloc[job_index]  # Use iloc for positional indexing
+
+        # Loop through each applicant in the applicant_df
+        for applicant_id in range(len(applicant_df)):
+            applicant_skills = applicant_df['Skills'].iloc[applicant_id]  # Use iloc for positional indexing
+            applicant_name = applicant_df['name'].iloc[applicant_id]  # Ensure correct column access
+
+            # Compute similarity score
+            score = semantic_similarity_VoyageLarge2Instruct(
+                " ".join(job_skills), " ".join(applicant_skills), tokenizer, model
+            )
+
+            # Append result to the DataFrame
+            matching_dataframe.append({
+                "applicant": applicant_name,
+                "job_id": job_index,
+                "VoyageLarge2Instruct_score": score
+            })
+
+    # Create a DataFrame from results
+    matching_dataframe = pd.DataFrame(matching_dataframe)
+
+    # Add rank based on similarity score
+    matching_dataframe['rank'] = matching_dataframe['VoyageLarge2Instruct_score'].rank(ascending=False)
     return matching_dataframe
 
 @retry(wait=wait_random_exponential(min=1, max=60), stop=stop_after_attempt(6))
