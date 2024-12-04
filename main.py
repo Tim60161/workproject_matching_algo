@@ -430,6 +430,35 @@ def calc_similarity_sbs_VoyageLarge2Instruct(applicant_df, job_df, tokenizer, mo
     matching_dataframe['rank'] = matching_dataframe['VoyageLarge2Instruct_score'].rank(ascending=False)
     return matching_dataframe
 
+def calc_cross(applicant_df, job_df, N=3, parallel=False):
+    """ Use Cross Encoder to calculate similarity of combined skills."""
+
+    # Initialize the model once outside the loop for efficiency
+    model = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
+
+     # Precompute job embeddings
+    job_df['Skills_Text'] = job_df['Skills'].apply(lambda x: ' '.join(sorted(set(x))) if isinstance(x, list) else '')
+    query = job_df['Skills_Text'][0]
+    # Precompute applicant embeddings
+    applicant_df['Skills_Text'] = applicant_df['Skills'].apply(lambda x: ' '.join(sorted(set(x))) if isinstance(x, list) else '')
+    applicants = applicant_df['Skills_Text'].tolist()
+
+    ranks = model.rank(
+        query,
+        applicants,
+        batch_size=32,
+        num_workers=os.cpu_count() // 2 if parallel else 0,
+        show_progress_bar=False
+    )
+
+    similarity_df = pd.DataFrame(ranks)
+    similarity_df['softmaxed'] = F.softmax(torch.tensor(similarity_df['score']))
+    similarity_df = similarity_df.join(applicant_df[["name"]], on="corpus_id")
+    
+    # similarity_df['interview_status'] = similarity_df.index.apply(lambda x: 'Selected' if x <= N else 'Not Selected')
+
+    return similarity_df
+
 @retry(wait=wait_random_exponential(min=1, max=60), stop=stop_after_attempt(6))
 def tailored_questions(api_key,  applicants, required_skills, model="gpt-4o-mini"):
     """ function to create tailored interview questions with openai api """
