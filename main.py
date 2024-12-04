@@ -169,7 +169,11 @@ def calc_similarity_sbs_all_MiniLM_L6_v2(applicant_df, job_df):
         model.eval()
         score = 0
         sen = job + resume
-        sen_embeddings = model.encode(sen)
+        sen_embeddings = model.encode(sen,
+                                      batch_size=4,
+                                      device='cpu',
+                                      show_progress_bar=True
+                                      )
         for i in range(len(job)):
             if job[i] in resume:
                 score += 1
@@ -214,11 +218,14 @@ def calc_similarity_sbs_NV_Embed_v2(applicant_df, job_df):
 
     def semantic_similarity_NV_Embed_v2(job, resume):
         """Calculate similarity with NV-Embed-v2."""
-        model = SentenceTransformer('nvidia/NV-Embed-v2', use_auth_token='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', trust_remote_code=True)  # Add trust_remote_code=True
-        model.eval()
+        model = model_NV_Embed_v2
         score = 0
         sen = job + resume
-        sen_embeddings = model.encode(sen)
+        sen_embeddings = model.encode(sen,
+                                      batch_size=4,
+                                      device='cpu',
+                                      show_progress_bar=True
+                                      )
         for i in range(len(job)):
             if job[i] in resume:
                 score += 1
