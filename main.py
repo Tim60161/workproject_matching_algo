@@ -5,7 +5,7 @@ from services.JobInfoExtraction import JobInfoExtraction
 from source.schemas.resumeextracted import ResumeExtractedModel # Let's reintroduce later on
 from source.schemas.jobextracted import JobExtractedModel # Let's reintroduce later on
 import fitz  # PyMuPDF
-from sentence_transformers import SentenceTransformer
+from sentence_transformers import SentenceTransformer, CrossEncoder
 from sklearn.metrics.pairwise import cosine_similarity
 from openai import OpenAI
 from tenacity import retry, wait_random_exponential, stop_after_attempt
