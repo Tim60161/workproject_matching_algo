@@ -363,9 +363,9 @@ def calc_similarity_sbs_all_MiniLM_L6_v2(applicant_df, job_df):
 def calc_similarity_sbs_NV_Embed_v2(applicant_df, job_df):
     """Calculate cosine similarity based on NV-Embed-v2 embeddings of skills (skill-by-skill)."""
 
-    def semantic_similarity_NV_Embed_v2(job, resume):
+    def semantic_similarity_NV_Embed_v2(job, resume, model):
         """Calculate similarity with NV-Embed-v2."""
-        model = model_NV_Embed_v2
+        model = model
         score = 0
         sen = job + resume
         sen_embeddings = model.encode(sen,
