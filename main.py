@@ -363,9 +363,9 @@ def calc_similarity_sbs_all_MiniLM_L6_v2(applicant_df, job_df):
 def calc_similarity_sbs_NV_Embed_v2(applicant_df, job_df):
     """Calculate cosine similarity based on NV-Embed-v2 embeddings of skills (skill-by-skill)."""
 
-    def semantic_similarity_NV_Embed_v2(job, resume, model):
+    def semantic_similarity_NV_Embed_v2(job, resume):
         """Calculate similarity with NV-Embed-v2."""
-        model = model
+        model = SentenceTransformer('nvidia/NV-Embed-v2', use_auth_token='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', trust_remote_code=True)
         score = 0
         sen = job + resume
         sen_embeddings = model.encode(sen,
@@ -464,147 +464,6 @@ def calc_similarity_sbs_SFR_Embedding_Mistral(applicant_df, job_df):
     # Add rank based on similarity score
     matching_dataframe['rank'] = matching_dataframe['SFR-Embedding-Mistral_score'].rank(ascending=False)
     return matching_dataframe
-
-def calc_similarity_sbs_BinGSE_MetaLlama_3_8B_Instruct(applicant_df, job_df, tokenizer, model):
-    """Calculate cosine similarity based on BinGSE-Meta-Llama-3-8B-Instruct embeddings of skills (skill-by-skill)."""
-
-    def semantic_similarity_BinGSE_MetaLlama_3_8B_Instruct(job, resume, tokenizer, model):
-        """Calculate similarity with BinGSE-Meta-Llama-3-8B-Instruct."""
-        import torch  # Import torch locally if needed
-        max_length = 75  # Define a reasonable max length for truncation
-        # Tokenize job and resume text
-        job_tokens = tokenizer(job, return_tensors="pt", truncation=True, padding=True, max_length=max_length)
-        resume_tokens = tokenizer(resume, return_tensors="pt", truncation=True, padding=True, max_length=max_length)
-
-        # Move tokens to the appropriate device and ensure correct tensor type
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        job_tokens = {key: value.to(device).long() if key == "input_ids" else value.to(device) for key, value in job_tokens.items()}
-        resume_tokens = {key: value.to(device).long() if key == "input_ids" else value.to(device) for key, value in resume_tokens.items()}
-
-        # Generate embeddings
-        with torch.no_grad():
-            job_embedding = model(**job_tokens).last_hidden_state.mean(dim=1).cpu().numpy()
-            resume_embedding = model(**resume_tokens).last_hidden_state.mean(dim=1).cpu().numpy()
-
-        # Calculate cosine similarity
-        similarity = cosine_similarity(job_embedding, resume_embedding)[0][0]
-        return round(similarity, 3)
-
-    # Prepare a DataFrame to store results
-    matching_dataframe = []
-
-    # Loop through each job in the job_df
-    for job_index in range(len(job_df)):
-        job_skills = job_df['Skills'].iloc[job_index]  # Use iloc for positional indexing
-
-        # Loop through each applicant in the applicant_df
-        for applicant_id in range(len(applicant_df)):
-            applicant_skills = applicant_df['Skills'].iloc[applicant_id]  # Use iloc for positional indexing
-            applicant_name = applicant_df['name'].iloc[applicant_id]  # Ensure correct column access
-
-            # Compute similarity score
-            score = semantic_similarity_BinGSE_MetaLlama_3_8B_Instruct(
-                " ".join(job_skills), " ".join(applicant_skills), tokenizer, model
-            )
-
-            # Append result to the DataFrame
-            matching_dataframe.append({
-                "applicant": applicant_name,
-                "job_id": job_index,
-                "BinGSE-Meta-Llama-3-8B-Instruct_score": score
-            })
-
-    # Create a DataFrame from results
-    matching_dataframe = pd.DataFrame(matching_dataframe)
-
-    # Add rank based on similarity score
-    matching_dataframe['rank'] = matching_dataframe['BinGSE-Meta-Llama-3-8B-Instruct_score'].rank(ascending=False)
-    return matching_dataframe
-
-def calc_similarity_sbs_VoyageLarge2Instruct(applicant_df, job_df, tokenizer, model):
-    """Calculate cosine similarity based on voyage-large-2-instruct embeddings of skills (skill-by-skill)."""
-
-    def semantic_similarity_VoyageLarge2Instruct(job, resume, tokenizer, model):
-        """Calculate similarity with voyage-large-2-instruct."""
-        import torch  # Import torch locally if needed
-        max_length = 75  # Define a reasonable max length for truncation
-        # Tokenize job and resume text
-        job_tokens = tokenizer(job, return_tensors="pt", truncation=True, padding=True, max_length=max_length)
-        resume_tokens = tokenizer(resume, return_tensors="pt", truncation=True, padding=True, max_length=max_length)
-
-        # Move tokens to the appropriate device and ensure correct tensor type
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        job_tokens = {key: value.to(device) for key, value in job_tokens.items()}
-        resume_tokens = {key: value.to(device) for key, value in resume_tokens.items()}
-
-        # Generate embeddings
-        with torch.no_grad():
-            job_embedding = model(**job_tokens).last_hidden_state.mean(dim=1).cpu().numpy()
-            resume_embedding = model(**resume_tokens).last_hidden_state.mean(dim=1).cpu().numpy()
-
-        # Calculate cosine similarity
-        similarity = cosine_similarity(job_embedding, resume_embedding)[0][0]
-        return round(similarity, 3)
-
-    # Prepare a DataFrame to store results
-    matching_dataframe = []
-
-    # Loop through each job in the job_df
-    for job_index in range(len(job_df)):
-        job_skills = job_df['Skills'].iloc[job_index]  # Use iloc for positional indexing
-
-        # Loop through each applicant in the applicant_df
-        for applicant_id in range(len(applicant_df)):
-            applicant_skills = applicant_df['Skills'].iloc[applicant_id]  # Use iloc for positional indexing
-            applicant_name = applicant_df['name'].iloc[applicant_id]  # Ensure correct column access
-
-            # Compute similarity score
-            score = semantic_similarity_VoyageLarge2Instruct(
-                " ".join(job_skills), " ".join(applicant_skills), tokenizer, model
-            )
-
-            # Append result to the DataFrame
-            matching_dataframe.append({
-                "applicant": applicant_name,
-                "job_id": job_index,
-                "VoyageLarge2Instruct_score": score
-            })
-
-    # Create a DataFrame from results
-    matching_dataframe = pd.DataFrame(matching_dataframe)
-
-    # Add rank based on similarity score
-    matching_dataframe['rank'] = matching_dataframe['VoyageLarge2Instruct_score'].rank(ascending=False)
-    return matching_dataframe
-
-'''def calc_cross(applicant_df, job_df, N=3, parallel=False):
-    """ Use Cross Encoder to calculate similarity of combined skills."""
-
-    # Initialize the model once outside the loop for efficiency
-    model = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
-
-     # Precompute job embeddings
-    job_df['Skills_Text'] = job_df['Skills'].apply(lambda x: ' '.join(sorted(set(x))) if isinstance(x, list) else '')
-    query = job_df['Skills_Text'][0]
-    # Precompute applicant embeddings
-    applicant_df['Skills_Text'] = applicant_df['Skills'].apply(lambda x: ' '.join(sorted(set(x))) if isinstance(x, list) else '')
-    applicants = applicant_df['Skills_Text'].tolist()
-
-    ranks = model.rank(
-        query,
-        applicants,
-        batch_size=32,
-        num_workers=os.cpu_count() // 2 if parallel else 0,
-        show_progress_bar=False
-    )
-
-    similarity_df = pd.DataFrame(ranks)
-    similarity_df['softmaxed'] = F.softmax(torch.tensor(similarity_df['score']))
-    similarity_df = similarity_df.join(applicant_df[["name"]], on="corpus_id")
-    
-    # similarity_df['interview_status'] = similarity_df.index.apply(lambda x: 'Selected' if x <= N else 'Not Selected')
-
-    return similarity_df'''
 
 # Similarity Calculation using Cross-Encoder
 def calc_cross(applicant_df, job_df, N=3, parallel=False):
