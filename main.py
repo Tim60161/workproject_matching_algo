@@ -360,12 +360,66 @@ def calc_similarity_sbs_all_MiniLM_L6_v2(applicant_df, job_df):
     matching_dataframe['rank'] = matching_dataframe['all-MiniLM-L6-v2_score'].rank(ascending=False)
     return matching_dataframe
 
-def calc_similarity_sbs_NV_Embed_v2(applicant_df, job_df):
+from sklearn.metrics.pairwise import cosine_similarity
+
+def calc_similarity_sbs_NV_Embed_v2(applicant_df, job_df, model):
     """Calculate cosine similarity based on NV-Embed-v2 embeddings of skills (skill-by-skill)."""
 
     def semantic_similarity_NV_Embed_v2(job, resume):
         """Calculate similarity with NV-Embed-v2."""
-        model = SentenceTransformer('nvidia/NV-Embed-v2', use_auth_token='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', trust_remote_code=True)
+        score = 0
+        sen = job + resume
+        sen_embeddings = model.encode(
+            sen,
+            batch_size=4,
+            device='cuda' if torch.cuda.is_available() else 'cpu',
+            show_progress_bar=True
+        )
+        for i in range(len(job)):
+            if job[i] in resume:
+                score += 1
+            else:
+                max_cosine_sim = max(cosine_similarity([sen_embeddings[i]], sen_embeddings[len(job):])[0])
+                if max_cosine_sim >= 0.4:
+                    score += max_cosine_sim
+        score = score / len(job)
+        return round(score, 3)
+
+    # Prepare a DataFrame to store results
+    matching_dataframe = []
+
+    # Loop through each job in the job_df
+    for job_index in range(len(job_df)):
+        job_skills = job_df['Skills'].iloc[job_index]  # Use iloc for positional indexing
+
+        # Loop through each applicant in the applicant_df
+        for applicant_id in range(len(applicant_df)):
+            applicant_skills = applicant_df['Skills'].iloc[applicant_id]  # Use iloc for positional indexing
+            applicant_name = applicant_df['name'].iloc[applicant_id]  # Ensure correct column access
+
+            # Compute similarity score
+            score = semantic_similarity_NV_Embed_v2(job_skills, applicant_skills)
+
+            # Append result to the DataFrame
+            matching_dataframe.append({
+                "applicant": applicant_name,
+                "job_id": job_index,
+                "NV-Embed-v2_score": score
+            })
+
+    # Create a DataFrame from results
+    matching_dataframe = pd.DataFrame(matching_dataframe)
+
+    # Add rank based on similarity score
+    matching_dataframe['rank'] = matching_dataframe['NV-Embed-v2_score'].rank(ascending=False)
+    return matching_dataframe
+
+'''def calc_similarity_sbs_NV_Embed_v2(applicant_df, job_df, model):
+    """Calculate cosine similarity based on NV-Embed-v2 embeddings of skills (skill-by-skill)."""
+
+    def semantic_similarity_NV_Embed_v2(job, resume):
+        """Calculate similarity with NV-Embed-v2."""
+        model = model
         score = 0
         sen = job + resume
         sen_embeddings = model.encode(sen,
@@ -410,7 +464,7 @@ def calc_similarity_sbs_NV_Embed_v2(applicant_df, job_df):
 
     # Add rank based on similarity score
     matching_dataframe['rank'] = matching_dataframe['NV-Embed-v2_score'].rank(ascending=False)
-    return matching_dataframe
+    return matching_dataframe'''
 
 def calc_similarity_sbs_SFR_Embedding_Mistral(applicant_df, job_df):
     """Calculate cosine similarity based on BERT embeddings of skills (skill-by-skill)."""
